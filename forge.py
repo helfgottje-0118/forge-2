@@ -4,8 +4,44 @@ import argparse
 import os
 from pathlib import Path
 import shlex
+import shutil
 import subprocess
 import sys
+import time
+
+
+BANNER = (
+    "FFFFF  OOO  RRRR   GGG  EEEEE",
+    "F     O   O R   R G     E",
+    "FFFF  O   O RRRR  G GGG EEEE",
+    "F     O   O R  R  G   G E",
+    "F      OOO  R   R  GGG  EEEEE",
+)
+
+
+def paint(text, color="36"):
+    if sys.stdout.isatty() and "NO_COLOR" not in os.environ:
+        return f"\033[{color}m{text}\033[0m"
+    return text
+
+
+def panel(title, lines):
+    width = max(20, min(78, shutil.get_terminal_size((80, 24)).columns - 2))
+    title = f" {title} "[:width - 4]
+    print(paint("╭─" + title + "─" * (width - len(title) - 3) + "╮", "33"))
+    for line in lines:
+        for start in range(0, max(1, len(line)), width - 4):
+            chunk = line[start:start + width - 4]
+            print(paint("│", "33") + " " + chunk.ljust(width - 4) + " " + paint("│", "33"))
+    print(paint("╰" + "─" * (width - 2) + "╯", "33"))
+
+
+def welcome():
+    print()
+    panel("FORGE", [*BANNER, "", "Local command runner · v0.1.0",
+                    "Type a shell command to execute it.",
+                    "/help  /pwd  /clear  /exit"])
+    print()
 
 
 def run(command, cwd):
@@ -19,10 +55,16 @@ def run(command, cwd):
 
 
 def interactive(cwd):
-    print("Forge — enter shell commands. Use cd, /pwd, /help, or /exit.")
+    try:
+        import readline  # Native line editing and session history on Unix.
+    except ImportError:
+        pass
+    welcome()
+    last_code = 0
     while True:
         try:
-            command = input(f"forge:{cwd}> ").strip()
+            print(paint(f"  FORGE │ local shell │ {cwd} │ exit {last_code}", "2"))
+            command = input(paint("❯ ", "33")).strip()
         except EOFError:
             print()
             return 0
@@ -34,9 +76,17 @@ def interactive(cwd):
         if command in ("/exit", "exit", "quit"):
             return 0
         if command == "/help":
-            print("Commands run immediately with your user's permissions.\n"
-                  "cd PATH changes Forge's directory; /pwd shows it; /exit quits.\n"
-                  "Each command uses a fresh shell; environment changes do not persist.")
+            panel("Help", ["Commands run immediately with your user's permissions.",
+                           "cd PATH  Change directory (quote paths with spaces)",
+                           "/pwd     Show current directory",
+                           "/clear   Clear screen and show the banner",
+                           "/exit    Quit Forge",
+                           "Each command uses a fresh shell; exports do not persist."])
+            continue
+        if command == "/clear":
+            if sys.stdout.isatty():
+                print("\033[2J\033[H", end="")
+            welcome()
             continue
         if command == "/pwd":
             print(cwd)
@@ -54,9 +104,13 @@ def interactive(cwd):
             except ValueError as exc:
                 print(f"forge: {exc}", file=sys.stderr)
             continue
-        code = run(command, cwd)
-        if code:
-            print(f"[exit {code}]", file=sys.stderr)
+        print(paint("─" * max(20, min(78, shutil.get_terminal_size((80, 24)).columns - 2)), "2"))
+        started = time.monotonic()
+        last_code = run(command, cwd)
+        elapsed = time.monotonic() - started
+        status = "Completed" if last_code == 0 else "Failed"
+        print(paint(f"  {status} │ exit {last_code} │ {elapsed:.2f}s", "32" if last_code == 0 else "31"))
+        print()
 
 
 def main():

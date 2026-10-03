@@ -105,11 +105,12 @@ def interactive(cwd):
                 print(f"forge: {exc}", file=sys.stderr)
             continue
         print(paint("─" * max(20, min(78, shutil.get_terminal_size((80, 24)).columns - 2)), "2"))
+        sys.stdout.flush()
         started = time.monotonic()
         last_code = run(command, cwd)
         elapsed = time.monotonic() - started
         status = "Completed" if last_code == 0 else "Failed"
-        print(paint(f"  {status} │ exit {last_code} │ {elapsed:.2f}s", "32" if last_code == 0 else "31"))
+        print("\n" + paint(f"  {status} │ exit {last_code} │ {elapsed:.2f}s", "32" if last_code == 0 else "31"))
         print()
 
 
